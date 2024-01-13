@@ -5,8 +5,10 @@ use crate::{
 };
 use derivative::Derivative;
 use std::io::Error;
-use termion::event::Key;
+use termion::{color, event::Key};
 
+const STATUS_FG_COLOR: color::Rgb = color::Rgb(63, 63, 63);
+const STATUS_BG_COLOR: color::Rgb = color::Rgb(239, 239, 239);
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[derive(Derivative)]
@@ -41,8 +43,24 @@ impl Editor {
             Key::Up | Key::Down | Key::Left | Key::Right => {
                 self.move_cursor(key);
             }
+            Key::Char('\n') => {
+                self.document.insert_nl(&self.cursor_position);
+                let Position { x, y: _ } = self.cursor_position;
+                Terminal::cursor_position(&Position {
+                    x: x.saturating_sub(1),
+                    y: 0,
+                });
+            }
+            Key::Char(c) => {
+                self.document.insert(&self.cursor_position, c);
+                self.move_cursor(Key::Right);
+            }
+            Key::Backspace => {
+                self.move_cursor(Key::Left);
+                self.document.delete(&self.cursor_position);
+            }
+
             Key::Esc => {
-                println!("AAAAA");
                 self.should_quit = true;
                 Terminal::clear_screen();
                 Terminal::cursor_position(&Position { x: 0, y: 0 });
@@ -70,8 +88,12 @@ impl Editor {
     }
     fn move_cursor(&mut self, key: Key) {
         let Position { mut y, mut x } = self.cursor_position;
-        let Size { width, height: _ } = self.terminal.size;
         let height = self.document.len();
+        let mut width = if let Some(row) = self.document.row(y) {
+            row.len()
+        } else {
+            0
+        };
         match key {
             Key::Up => y = y.saturating_sub(1),
             Key::Down => {
@@ -87,6 +109,14 @@ impl Editor {
             }
             _ => unreachable!(),
         }
+        width = if let Some(row) = self.document.row(y) {
+            row.len()
+        } else {
+            0
+        };
+        if x > width {
+            x = width;
+        }
         self.cursor_position = Position { x, y }
     }
     fn refresh_screen(&self) -> Result<(), Error> {
@@ -94,6 +124,8 @@ impl Editor {
         Terminal::cursor_position(&Position { x: 0, y: 0 });
         if !self.should_quit {
             self.draw_rows()?;
+            self.draw_status_bar();
+            self.draw_message_bar();
             Terminal::cursor_position(&Position {
                 x: self.cursor_position.x.saturating_sub(self.offset.x),
                 y: self.cursor_position.y.saturating_sub(self.offset.y),
@@ -119,9 +151,31 @@ impl Editor {
         let row = row.render(start, end);
         println!("{row}\r");
     }
+    fn draw_status_bar(&self) {
+        Terminal::set_bg_color(STATUS_BG_COLOR);
+        Terminal::set_fg_color(STATUS_FG_COLOR);
+        let f = if let Some(fname) = &self.document.filename {
+            fname.clone()
+        } else {
+            String::from("[No Name]")
+        };
+
+        let status = format!(
+            "Editing: {f} {}/{}",
+            self.cursor_position.y.saturating_add(1),
+            self.document.len()
+        );
+        let spaces = " ".repeat(self.terminal.size.width as usize - status.len());
+        println!("{status}{spaces}\r");
+        Terminal::reset_fg_color();
+        Terminal::reset_bg_color();
+    }
+    fn draw_message_bar(&self) {
+        Terminal::clear_current_line();
+    }
     fn draw_rows(&self) -> Result<(), Error> {
         let height = self.terminal.size.height as usize;
-        for terminal_row in 0..height - 1 {
+        for terminal_row in 0..height {
             Terminal::clear_current_line();
             if let Some(row) = self.document.row(terminal_row + self.offset.y) {
                 self.draw_row(row);

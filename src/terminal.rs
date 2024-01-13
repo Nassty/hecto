@@ -1,6 +1,7 @@
 use crate::editor::Position;
 use std::io::{self, stdout, Error, Stdout, Write};
 use termion::{
+    color,
     event::Key,
     input::TermRead,
     raw::{IntoRawMode, RawTerminal},
@@ -23,7 +24,7 @@ pub struct Size {
 impl From<(u16, u16)> for Size {
     fn from(p: (u16, u16)) -> Self {
         Self {
-            height: p.1,
+            height: p.1.saturating_sub(2),
             width: p.0,
         }
     }
@@ -59,6 +60,24 @@ impl Terminal {
         let x = pos.x.saturating_add(1) as u16;
         let y = pos.y.saturating_add(1) as u16;
         print!("{}", termion::cursor::Goto(x, y));
+    }
+    pub fn set_bg_color(color: color::Rgb) {
+        #[cfg(target_os = "linux")]
+        print!("{}", color::Bg(color));
+        #[cfg(target_os = "macos")]
+        print!("{}", termion::style::Invert);
+    }
+    pub fn reset_bg_color() {
+        #[cfg(target_os = "linux")]
+        print!("{}", color::Bg(color::Reset));
+        #[cfg(target_os = "macos")]
+        print!("{}", termion::style::Reset);
+    }
+    pub fn set_fg_color(color: color::Rgb) {
+        print!("{}", color::Fg(color));
+    }
+    pub fn reset_fg_color() {
+        print!("{}", color::Fg(color::Reset));
     }
 
     pub fn read_key() -> Result<Key, Error> {

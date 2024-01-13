@@ -1,3 +1,4 @@
+use crate::editor::Position;
 use crate::row::Row;
 use derivative::Derivative;
 use std::fs::read_to_string;
@@ -6,6 +7,7 @@ use std::fs::read_to_string;
 #[derivative(Default)]
 pub struct Document {
     rows: Vec<Row>,
+    pub filename: Option<String>,
 }
 
 impl Document {
@@ -15,7 +17,8 @@ impl Document {
             .lines()
             .map(|x| x.into())
             .collect();
-        Self { rows }
+        let filename = Some(filename.to_owned());
+        Self { rows, filename }
     }
     pub fn row(&self, index: usize) -> Option<&Row> {
         self.rows.get(index)
@@ -25,5 +28,35 @@ impl Document {
     }
     pub fn len(&self) -> usize {
         self.rows.len()
+    }
+    pub fn insert(&mut self, at: &Position, c: char) {
+        if at.y == self.len() {
+            self.rows.push(Row::from(c));
+        } else if at.y < self.len() {
+            let row = self.rows.get_mut(at.y).unwrap();
+            row.insert(at.x, c);
+        }
+    }
+    pub fn insert_nl(&mut self, at: &Position) {
+        if at.y > self.len() {
+            return;
+        }
+        if at.y == self.len() {
+            self.rows.push(Row::default());
+            return;
+        }
+        let new_row = self.rows.get_mut(at.y).unwrap().split(at.x);
+        self.rows.insert(at.y + 1, new_row);
+    }
+    pub fn delete(&mut self, at: &Position) {
+        if at.y >= self.len() {
+            return;
+        }
+        let row = self.rows.get_mut(at.y).unwrap();
+        if !row.is_empty() {
+            row.delete(at.x);
+            return;
+        }
+        self.rows.remove(at.y);
     }
 }
