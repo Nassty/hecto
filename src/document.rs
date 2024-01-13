@@ -1,6 +1,7 @@
 use crate::editor::Position;
 use crate::row::Row;
 use derivative::Derivative;
+use std::cmp::Ordering;
 use std::fs::read_to_string;
 
 #[derive(Derivative)]
@@ -15,7 +16,7 @@ impl Document {
         let rows = read_to_string(filename)
             .expect("File to exist")
             .lines()
-            .map(|x| x.into())
+            .map(std::convert::Into::into)
             .collect();
         let filename = Some(filename.to_owned());
         Self { rows, filename }
@@ -30,11 +31,15 @@ impl Document {
         self.rows.len()
     }
     pub fn insert(&mut self, at: &Position, c: char) {
-        if at.y == self.len() {
-            self.rows.push(Row::from(c));
-        } else if at.y < self.len() {
-            let row = self.rows.get_mut(at.y).unwrap();
-            row.insert(at.x, c);
+        match at.y.cmp(&self.len()) {
+            Ordering::Equal => {
+                self.rows.push(Row::from(c));
+            }
+            Ordering::Less => {
+                let row = self.rows.get_mut(at.y).unwrap();
+                row.insert(at.x, c);
+            }
+            Ordering::Greater => unreachable!(),
         }
     }
     pub fn insert_nl(&mut self, at: &Position) {

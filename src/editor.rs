@@ -33,9 +33,10 @@ pub struct Editor {
 
 impl Editor {
     pub fn open(fname: &str) -> Self {
-        let mut s = Self::default();
-        s.document = Document::open(fname);
-        s
+        Self {
+            document: Document::open(fname),
+            ..Default::default()
+        }
     }
     fn process_keypress(&mut self) -> Result<(), Error> {
         let key = Terminal::read_key()?;
@@ -97,14 +98,14 @@ impl Editor {
         match key {
             Key::Up => y = y.saturating_sub(1),
             Key::Down => {
-                if y < height as usize {
-                    y = y.saturating_add(1)
+                if y < height {
+                    y = y.saturating_add(1);
                 }
             }
             Key::Left => x = x.saturating_sub(1),
             Key::Right => {
-                if x < width as usize {
-                    x = x.saturating_add(1)
+                if x < width {
+                    x = x.saturating_add(1);
                 }
             }
             _ => unreachable!(),
@@ -123,9 +124,9 @@ impl Editor {
         Terminal::cursor_hide();
         Terminal::cursor_position(&Position { x: 0, y: 0 });
         if !self.should_quit {
-            self.draw_rows()?;
+            self.draw_rows();
             self.draw_status_bar();
-            self.draw_message_bar();
+            //self.draw_message_bar();
             Terminal::cursor_position(&Position {
                 x: self.cursor_position.x.saturating_sub(self.offset.x),
                 y: self.cursor_position.y.saturating_sub(self.offset.y),
@@ -135,14 +136,14 @@ impl Editor {
         Terminal::flush()
     }
     fn draw_welcome_message(&self) {
-        let mut welcome_message = format!("Hecto editor -- version {}", VERSION);
+        let mut welcome_message = format!("Hecto editor -- version {VERSION}");
         let width = self.terminal.size.width as usize;
         let len = welcome_message.len();
         let padding = width.saturating_sub(len) / 2;
         let spaces = " ".repeat(padding.saturating_sub(1));
-        welcome_message = format!("~{}{}", spaces, welcome_message);
+        welcome_message = format!("~{spaces}{welcome_message}");
         welcome_message.truncate(width);
-        println!("{}\r", welcome_message);
+        println!("{welcome_message}\r");
     }
     fn draw_row(&self, row: &Row) {
         let width = self.terminal.size.width as usize;
@@ -170,10 +171,10 @@ impl Editor {
         Terminal::reset_fg_color();
         Terminal::reset_bg_color();
     }
-    fn draw_message_bar(&self) {
-        Terminal::clear_current_line();
-    }
-    fn draw_rows(&self) -> Result<(), Error> {
+    //fn draw_message_bar(&self) {
+    //    Terminal::clear_current_line();
+    //}
+    fn draw_rows(&self) {
         let height = self.terminal.size.height as usize;
         for terminal_row in 0..height {
             Terminal::clear_current_line();
@@ -185,12 +186,11 @@ impl Editor {
                 println!("~\r");
             }
         }
-        Ok(())
     }
     pub fn run(&mut self) -> Result<(), Error> {
         while !self.should_quit {
-            let _refresh = self.refresh_screen()?;
-            let _key = self.process_keypress()?;
+            self.refresh_screen()?;
+            self.process_keypress()?;
         }
         Ok(())
     }

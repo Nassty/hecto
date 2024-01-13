@@ -57,13 +57,13 @@ impl Terminal {
         io::stdout().flush()
     }
     pub fn cursor_position(pos: &Position) {
-        let x = pos.x.saturating_add(1) as u16;
-        let y = pos.y.saturating_add(1) as u16;
+        let x = usize::try_into(pos.x.saturating_add(1)).unwrap();
+        let y = usize::try_into(pos.y.saturating_add(1)).unwrap();
         print!("{}", termion::cursor::Goto(x, y));
     }
-    pub fn set_bg_color(color: color::Rgb) {
+    pub fn set_bg_color(_color: color::Rgb) {
         #[cfg(target_os = "linux")]
-        print!("{}", color::Bg(color));
+        print!("{}", color::Bg(_color));
         #[cfg(target_os = "macos")]
         print!("{}", termion::style::Invert);
     }
