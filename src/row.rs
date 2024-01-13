@@ -1,3 +1,4 @@
+use crate::highlighting;
 use derivative::Derivative;
 use std::cmp;
 use unicode_segmentation::UnicodeSegmentation;
@@ -7,6 +8,7 @@ use unicode_segmentation::UnicodeSegmentation;
 pub struct Row {
     string: String,
     len: usize,
+    highlighting: Vec<highlighting::Type>,
 }
 
 impl Row {
@@ -17,11 +19,28 @@ impl Row {
             .graphemes(true)
             .skip(start)
             .take(end - start)
-            .map(|x| match x {
-                "\t" => "    ",
-                _ => x,
+            .map(|x| match x.chars().next().unwrap() {
+                '\t' => "    ".into(),
+                _ => x.to_string(),
             })
-            .collect()
+            .collect::<String>()
+            .chars()
+            .zip(self.highlighting.iter())
+            .fold(
+                (None, String::new()),
+                |(prev_highlight, mut acc), (char, highlighting)| {
+                    if Some(highlighting) != prev_highlight {
+                        acc.push_str(&format!(
+                            "{}{}",
+                            termion::color::Fg(termion::color::Reset),
+                            termion::color::Fg(highlighting.to_color())
+                        ));
+                    }
+                    acc.push(char);
+                    (Some(highlighting), acc)
+                },
+            )
+            .1
     }
     pub fn len(&self) -> usize {
         self.len
@@ -61,6 +80,25 @@ impl Row {
 
         Self::from(&new_line[..])
     }
+    pub fn highlight(&mut self) {
+        let mut inside_string = false;
+        self.highlighting = self
+            .string
+            .chars()
+            .map(|c| {
+                if c.is_ascii_digit() {
+                    highlighting::Type::Number
+                } else if c == '"' || c == '\'' || inside_string {
+                    if c == '\"' || c == '\'' {
+                        inside_string = !inside_string;
+                    }
+                    highlighting::Type::String
+                } else {
+                    highlighting::Type::None
+                }
+            })
+            .collect();
+    }
 }
 
 impl From<char> for Row {
@@ -73,6 +111,7 @@ impl From<&str> for Row {
     fn from(input: &str) -> Self {
         let mut r = Self {
             string: input.into(),
+            highlighting: Vec::new(),
             len: 0,
         };
         r.update_len();

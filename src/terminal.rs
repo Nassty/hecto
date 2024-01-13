@@ -10,7 +10,8 @@ use termion::{
 use derivative::Derivative;
 #[derive(Derivative)]
 pub struct Terminal {
-    _stdout: RawTerminal<Stdout>,
+    #[allow(dead_code)]
+    out: RawTerminal<Stdout>,
     pub size: Size,
 }
 
@@ -35,8 +36,8 @@ impl Default for Terminal {
         let size = termion::terminal_size()
             .expect("Get the terminal size")
             .into();
-        let _stdout = stdout().into_raw_mode().expect("Get the terminal raw mode");
-        Self { _stdout, size }
+        let out = stdout().into_raw_mode().expect("Get the terminal raw mode");
+        Self { out, size }
     }
 }
 
