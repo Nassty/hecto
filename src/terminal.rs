@@ -47,6 +47,7 @@ impl Terminal {
     }
     pub fn cursor_show() {
         print!("{}", termion::cursor::Show);
+        print!("{}", termion::cursor::BlinkingUnderline);
     }
     pub fn clear_screen() {
         print!("{}", termion::clear::All);
@@ -58,6 +59,11 @@ impl Terminal {
         io::stdout().flush()
     }
     pub fn cursor_position(pos: &Position) {
+        let x = usize::try_into(pos.x.saturating_add(6)).unwrap();
+        let y = usize::try_into(pos.y.saturating_add(1)).unwrap();
+        print!("{}", termion::cursor::Goto(x, y));
+    }
+    pub fn cursor_position_no_offset(pos: &Position) {
         let x = usize::try_into(pos.x.saturating_add(1)).unwrap();
         let y = usize::try_into(pos.y.saturating_add(1)).unwrap();
         print!("{}", termion::cursor::Goto(x, y));

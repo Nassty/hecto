@@ -78,7 +78,7 @@ impl Editor {
         if y < offset.y {
             offset.y = y;
         } else if y >= offset.y.saturating_add(height as usize) {
-            offset.y = y.saturating_sub(height as usize).saturating_add(1);
+            offset.y = y.saturating_sub(height as usize).saturating_add(10);
         }
 
         if x < offset.x {
@@ -122,7 +122,7 @@ impl Editor {
     }
     fn refresh_screen(&self) -> Result<(), Error> {
         Terminal::cursor_hide();
-        Terminal::cursor_position(&Position { x: 0, y: 0 });
+        Terminal::cursor_position_no_offset(&Position { x: 0, y: 0 });
         if !self.should_quit {
             self.draw_rows();
             self.draw_status_bar();
@@ -145,12 +145,17 @@ impl Editor {
         welcome_message.truncate(width);
         println!("{welcome_message}\r");
     }
-    fn draw_row(&self, row: &Row) {
-        let width = self.terminal.size.width as usize;
+    fn draw_row(&self, row: &Row, lineno: usize) {
+        let width = self.terminal.size.width.saturating_sub(5) as usize;
         let start = self.offset.x;
         let end = self.offset.x + width;
         let row = row.render(start, end);
-        println!("{row}\r");
+        Terminal::set_bg_color(STATUS_BG_COLOR);
+        Terminal::set_fg_color(STATUS_FG_COLOR);
+        print!("{lineno:<4}");
+        Terminal::reset_fg_color();
+        Terminal::reset_bg_color();
+        println!(" {row}\r");
     }
     fn draw_status_bar(&self) {
         Terminal::set_bg_color(STATUS_BG_COLOR);
@@ -178,8 +183,9 @@ impl Editor {
         let height = self.terminal.size.height as usize;
         for terminal_row in 0..height {
             Terminal::clear_current_line();
-            if let Some(row) = self.document.row(terminal_row + self.offset.y) {
-                self.draw_row(row);
+            let lineno = terminal_row + self.offset.y;
+            if let Some(row) = self.document.row(lineno) {
+                self.draw_row(row, lineno);
             } else if self.document.is_empty() && terminal_row == height / 3 {
                 self.draw_welcome_message();
             } else {
