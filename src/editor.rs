@@ -4,7 +4,7 @@ use crate::{
     terminal::{Size, Terminal},
 };
 use derivative::Derivative;
-use std::io::Error;
+use std::{fmt::Display, io::Error};
 use termion::{color, event::Key};
 
 const STATUS_FG_COLOR: color::Rgb = color::Rgb(63, 63, 63);
@@ -20,6 +20,22 @@ pub struct Position {
     pub y: usize,
 }
 
+#[derive(PartialEq)]
+enum Mode {
+    Insert,
+    Normal,
+}
+
+impl Display for Mode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Mode::Insert => "INSERT",
+            Mode::Normal => "NORMAL",
+        })?;
+        Ok(())
+    }
+}
+
 #[derive(Derivative)]
 #[derivative(Default)]
 pub struct Editor {
@@ -29,6 +45,8 @@ pub struct Editor {
     cursor_position: Position,
     offset: Position,
     document: Document,
+    #[derivative(Default(value = "Mode::Normal"))]
+    mode: Mode,
 }
 
 impl Editor {
@@ -38,7 +56,28 @@ impl Editor {
             ..Default::default()
         }
     }
-    fn process_keypress(&mut self) -> Result<(), Error> {
+    fn process_keypress_normal(&mut self) -> Result<(), Error> {
+        let key = Terminal::read_key()?;
+        match key {
+            Key::Char('i') => self.switch_mode(Mode::Insert),
+            Key::Char('h') => self.move_cursor(Key::Left),
+            Key::Char('j') => self.move_cursor(Key::Down),
+            Key::Char('k') => self.move_cursor(Key::Up),
+            Key::Char('l') => self.move_cursor(Key::Right),
+            Key::Ctrl('q') => {
+                self.should_quit = true;
+                Terminal::clear_screen();
+                Terminal::cursor_position(&Position { x: 0, y: 0 });
+            }
+            _ => {}
+        }
+        self.scroll();
+        Ok(())
+    }
+    fn switch_mode(&mut self, mode: Mode) {
+        self.mode = mode;
+    }
+    fn process_keypress_insert(&mut self) -> Result<(), Error> {
         let key = Terminal::read_key()?;
         match key {
             Key::Up | Key::Down | Key::Left | Key::Right => {
@@ -52,19 +91,26 @@ impl Editor {
                     y: 0,
                 });
             }
+            Key::Ctrl('q') => {
+                self.should_quit = true;
+                Terminal::clear_screen();
+                Terminal::cursor_position(&Position { x: 0, y: 0 });
+            }
             Key::Char(c) => {
                 self.document.insert(&self.cursor_position, c);
                 self.move_cursor(Key::Right);
             }
             Key::Backspace => {
+                let Position { x, y: _ } = self.cursor_position;
                 self.move_cursor(Key::Left);
                 self.document.delete(&self.cursor_position);
+                if x == 0 {
+                    self.move_cursor(Key::Up);
+                }
             }
 
             Key::Esc => {
-                self.should_quit = true;
-                Terminal::clear_screen();
-                Terminal::cursor_position(&Position { x: 0, y: 0 });
+                self.switch_mode(Mode::Normal);
             }
             _ => {}
         }
@@ -90,8 +136,8 @@ impl Editor {
     fn move_cursor(&mut self, key: Key) {
         let Position { mut y, mut x } = self.cursor_position;
         let height = self.document.len();
-        let mut width = if let Some(row) = self.document.row(y) {
-            row.len()
+        let mut width = if let Some(row) = self.document.row(y, self.mode == Mode::Normal) {
+            self.document.row_len(y)
         } else {
             0
         };
@@ -110,8 +156,8 @@ impl Editor {
             }
             _ => unreachable!(),
         }
-        width = if let Some(row) = self.document.row(y) {
-            row.len()
+        width = if let Some(row) = self.document.row(y, self.mode == Mode::Normal) {
+            self.document.row_len(y)
         } else {
             0
         };
@@ -145,11 +191,11 @@ impl Editor {
         welcome_message.truncate(width);
         println!("{welcome_message}\r");
     }
-    fn draw_row(&self, row: &Row, lineno: usize) {
+    fn draw_row(&self, lineno: usize) {
         let width = self.terminal.size.width.saturating_sub(5) as usize;
         let start = self.offset.x;
         let end = self.offset.x + width;
-        let row = row.render(start, end);
+        let row = self.document.render(lineno, start, end);
         Terminal::set_bg_color(STATUS_BG_COLOR);
         Terminal::set_fg_color(STATUS_FG_COLOR);
         print!("{lineno:<4}");
@@ -167,7 +213,8 @@ impl Editor {
         };
 
         let status = format!(
-            "Editing: {f} {}/{}",
+            "[{}] Editing: {f} {}/{}",
+            self.mode,
             self.cursor_position.y.saturating_add(1),
             self.document.len()
         );
@@ -184,8 +231,8 @@ impl Editor {
         for terminal_row in 0..height {
             Terminal::clear_current_line();
             let lineno = terminal_row + self.offset.y;
-            if let Some(row) = self.document.row(lineno) {
-                self.draw_row(row, lineno);
+            if let Some(row) = self.document.row(lineno, self.mode == Mode::Normal) {
+                self.draw_row(lineno);
             } else if self.document.is_empty() && terminal_row == height / 3 {
                 self.draw_welcome_message();
             } else {
@@ -196,7 +243,10 @@ impl Editor {
     pub fn run(&mut self) -> Result<(), Error> {
         while !self.should_quit {
             self.refresh_screen()?;
-            self.process_keypress()?;
+            match self.mode {
+                Mode::Normal => self.process_keypress_normal()?,
+                Mode::Insert => self.process_keypress_insert()?,
+            }
         }
         Ok(())
     }

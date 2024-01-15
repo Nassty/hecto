@@ -1,6 +1,6 @@
 mod document;
 mod editor;
-mod highlighting;
+mod highlight; // NEW
 mod row;
 mod terminal;
 use std::{env, io::Error};

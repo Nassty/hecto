@@ -1,53 +1,32 @@
-use crate::highlighting;
 use derivative::Derivative;
 use std::cmp;
 use unicode_segmentation::UnicodeSegmentation;
 
 #[derive(Derivative)]
 #[derivative(Default)]
+#[derivative(Debug)]
+#[derivative(Clone)]
 pub struct Row {
-    string: String,
+    pub string: String,
     len: usize,
-    highlighting: Vec<highlighting::Type>,
 }
 
 impl Row {
     pub fn render(&self, start: usize, end: usize) -> String {
         let end = cmp::min(end, self.string.len());
         let start = cmp::min(start, end);
-        format!(
-            "{}{}",
-            self.string[..]
-                .graphemes(true)
-                .skip(start)
-                .take(end - start)
-                .map(|x| {
-                    if matches!(x.chars().next().unwrap(), '\t') {
-                        "    ".into()
-                    } else {
-                        x.to_string()
-                    }
-                })
-                .collect::<String>()
-                .chars()
-                .zip(self.highlighting.iter())
-                .fold(
-                    (None, String::new()),
-                    |(prev_highlight, mut acc), (char, highlighting)| {
-                        if Some(highlighting) != prev_highlight {
-                            acc.push_str(&format!(
-                                "{}{}",
-                                termion::color::Fg(termion::color::Reset),
-                                termion::color::Fg(highlighting.to_color())
-                            ));
-                        }
-                        acc.push(char);
-                        (Some(highlighting), acc)
-                    },
-                )
-                .1,
-            termion::color::Fg(termion::color::Reset)
-        )
+        self.string[..]
+            .graphemes(true)
+            .skip(start)
+            .take(end - start)
+            .map(|x| {
+                if matches!(x.chars().next().unwrap(), '\t') {
+                    "    ".into()
+                } else {
+                    x.to_string()
+                }
+            })
+            .collect()
     }
     pub fn len(&self) -> usize {
         self.len
@@ -87,22 +66,6 @@ impl Row {
 
         Self::from(&new_line[..])
     }
-    pub fn highlight(&mut self) {
-        let mut inside_string = false;
-        self.highlighting = self
-            .string
-            .chars()
-            .map(|c| match c {
-                c if c.is_ascii_digit() => highlighting::Type::Number,
-                '"' | '\'' => {
-                    inside_string = !inside_string;
-                    highlighting::Type::String
-                }
-                _ if inside_string => highlighting::Type::String,
-                _ => highlighting::Type::None,
-            })
-            .collect();
-    }
 }
 
 impl From<char> for Row {
@@ -111,11 +74,21 @@ impl From<char> for Row {
     }
 }
 
+impl From<String> for Row {
+    fn from(input: String) -> Self {
+        let mut r: Row = Self {
+            string: input,
+            len: 0,
+        };
+        r.update_len();
+        r
+    }
+}
+
 impl From<&str> for Row {
     fn from(input: &str) -> Self {
         let mut r = Self {
             string: input.into(),
-            highlighting: Vec::new(),
             len: 0,
         };
         r.update_len();

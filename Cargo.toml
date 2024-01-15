@@ -7,5 +7,6 @@ edition = "2021"
 
 [dependencies]
 derivative = "2.2.0"
+synoptic = "1.2.0"
 termion = "3.0.0"
 unicode-segmentation = "1.10.1"
